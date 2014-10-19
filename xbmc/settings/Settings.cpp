@@ -46,6 +46,7 @@
 #include "threads/SingleLock.h"
 #include "utils/CharsetConverter.h"
 #include "utils/log.h"
+#include "utils/Digest.h"
 #include "utils/RssManager.h"
 #include "utils/StringUtils.h"
 #include "utils/SystemInfo.h"
@@ -59,6 +60,7 @@
 
 using namespace KODI;
 using namespace XFILE;
+using KODI::UTILITY::CDigest;
 
 //! @todo: remove in c++17
 constexpr const char* CSettings::SETTING_LOOKANDFEEL_SKIN;
@@ -536,6 +538,17 @@ bool CSettings::Save(const std::string &file)
 
   if (!Save(root))
     return false;
+
+  // Avoid saving if the settings saved earlier are indetical to the current ones
+  if (CFile::Exists(file))
+  {
+    std::string fileMD5 = CUtil::GetFileDigest(file, KODI::UTILITY::CDigest::Type::MD5);
+    TiXmlPrinter xmlPrinter;
+    xmlDoc.Accept(&xmlPrinter);
+    std::string settingsMD5 = CDigest::Calculate(CDigest::Type::MD5,(xmlPrinter.CStr()));
+    if (fileMD5 == settingsMD5)
+      return true;
+  }
 
   return xmlDoc.SaveFile(file);
 }
