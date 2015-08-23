@@ -115,6 +115,11 @@ namespace XBMCAddon
         CApplicationMessenger::GetInstance().PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, function);
     }
 
+    void setosmcwalkthroughstatus(int state)
+    {
+      CApplicationMessenger::GetInstance().SendMsg(TMSG_SETOSMCWALKTHROUGHSTATE, state);
+    }
+
     String executeJSONRPC(const char* jsonrpccommand)
     {
       XBMC_TRACE;
