@@ -1048,8 +1048,11 @@ void CApplication::OnSettingChanged(const std::shared_ptr<const CSetting>& setti
     {
       // now we can finally reload skins
       std::string builtin("ReloadSkin");
-      if (settingId == CSettings::SETTING_LOOKANDFEEL_SKIN && m_confirmSkinChange)
+      if (settingId == CSettings::SETTING_LOOKANDFEEL_SKIN && m_confirmSkinChange && m_eOSMCWalkthroughState != OSMC_WALKTHROUGH_ISRUNNING)
         builtin += "(confirm)";
+     // We need to set ISDONE first so reloading is allowed
+     if (m_eOSMCWalkthroughState == OSMC_WALKTHROUGH_ISRUNNING)
+        m_eOSMCWalkthroughState = OSMC_WALKTHROUGH_ISDONE;
       CApplicationMessenger::GetInstance().PostMsg(TMSG_EXECUTE_BUILT_IN, -1, -1, nullptr, builtin);
     }
   }
