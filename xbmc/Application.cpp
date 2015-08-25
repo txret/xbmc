@@ -1167,6 +1167,12 @@ void CApplication::ReloadSkin(bool confirm/*=false*/)
   if (!g_SkinInfo || m_bInitializing)
     return; // Don't allow reload before skin is loaded by system
 
+  if (m_eOSMCWalkthroughState == OSMC_WALKTHROUGH_ISRUNNING || m_eOSMCWalkthroughState == OSMC_WALKTHROUGH_NOTRUNNING)
+  {
+     CLog::Log(LOGINFO, "Suppressing skin reload as the walkthrough is running");
+     return;
+  }
+
   std::string oldSkin = g_SkinInfo->ID();
 
   CGUIMessage msg(GUI_MSG_LOAD_SKIN, -1, CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow());
