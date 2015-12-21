@@ -35,6 +35,17 @@
 
 #include <locale.h>
 
+#include "Application.h"
+#include "messaging/ApplicationMessenger.h"
+
+using namespace KODI::MESSAGING;
+
+void sigterm_handler(int signum)
+{
+       CLog::Log(LOGINFO, "OSMC: received signal to tear down Kodi");
+       if (! g_application.isShuttingDown())
+          CApplicationMessenger::GetInstance().PostMsg(TMSG_QUIT);
+}
 namespace
 {
 
