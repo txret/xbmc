@@ -227,6 +227,11 @@ void CRepositoryUpdater::ScheduleUpdate()
   if (CAddonSystemSettings::GetInstance().GetAddonAutoUpdateMode() == AUTO_UPDATES_NEVER)
     return;
 
+  if (g_application.m_eOSMCWalkthroughState != 2) {
+       CLog::Log(LOGDEBUG, "CRepositoryUpdater: refusing to update until My OSMC asserts");
+       return;
+  }
+
   if (!m_addonMgr.HasAddons(ADDON_REPOSITORY))
     return;
 
