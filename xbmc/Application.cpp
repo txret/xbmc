@@ -229,6 +229,7 @@ CApplication::CApplication(void)
 #endif
   m_itemCurrentFile(new CFileItem)
   , m_pInertialScrollingHandler(new CInertialScrollingHandler())
+  , m_eOSMCWalkthroughState(OSMC_WALKTHROUGH_NOTRUNNING)
   , m_WaitingExternalCalls(0)
   , m_playerEvent(true, true)
 {
@@ -2762,6 +2763,12 @@ void CApplication::Stop(int exitCode)
   cleanup_emu_environ();
 
   KODI::TIME::Sleep(200);
+}
+
+void CApplication::SetOSMCWalkthroughState(OSMCWalkthroughState state)
+{
+ m_eOSMCWalkthroughState = state;
+ CServiceBroker::GetRepositoryUpdater().ScheduleUpdate();
 }
 
 bool CApplication::PlayMedia(CFileItem& item, const std::string &player, int iPlaylist)
