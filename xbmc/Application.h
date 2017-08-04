@@ -344,6 +344,9 @@ public:
 
   void SetLoggingIn(bool switchingProfiles);
 
+  /*! \Ensure that we only handle one request to reload the skin at once */
+  bool m_SkinReloading;
+
   /*!
    \brief Register an action listener.
    \param listener The listener to register
