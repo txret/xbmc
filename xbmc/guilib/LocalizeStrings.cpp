@@ -47,20 +47,46 @@ static bool LoadPO(const std::string &filename, std::map<uint32_t, LocStr>& stri
 
       if (bSourceLanguage && !PODoc.GetMsgid().empty())
       {
-        if (bStrInMem && (strings[id + offset].strOriginal.empty() ||
-                          PODoc.GetMsgid() == strings[id + offset].strOriginal))
-          continue;
-        else if (bStrInMem)
-          CLog::Log(LOGDEBUG,
-              "POParser: id:%i was recently re-used in the English string file, which is not yet "
-                  "changed in the translated file. Using the English string instead", id);
-        strings[id + offset].strTranslated = PODoc.GetMsgid();
+        if (bStrInMem)
+        {
+          if (!strings[id + offset].strOriginal.empty() &&
+              strings[id + offset].strOriginal != "")
+          {
+            if (strings[id + offset].strOriginal == PODoc.GetMsgid())
+              continue;
+            CLog::Log(LOGDEBUG,
+              "POParser: string for id:%i is different in the English string file.\n"
+              "The translation file may need updating.\n"
+              "%s -> %s", id, strings[id + offset].strOriginal.c_str(), PODoc.GetMsgid().c_str());
+          }
+          else if (strings[id + offset].strTranslated != PODoc.GetMsgid())
+          {
+            CLog::Log(LOGDEBUG, "POParser: string for id %i is different:\n\t"
+            "in memory: %s\n\tin file: %s\n\tignoring",
+              id, strings[id + offset].strTranslated.c_str(), PODoc.GetMsgid().c_str());
+            continue;
+          }
+        }
+        else
+          strings[id + offset].strTranslated = PODoc.GetMsgid();
         counter++;
       }
-      else if (!bSourceLanguage && !bStrInMem && !PODoc.GetMsgstr().empty())
+      else if (!bSourceLanguage && !PODoc.GetMsgstr().empty())
       {
-        strings[id + offset].strTranslated = PODoc.GetMsgstr();
-        strings[id + offset].strOriginal = PODoc.GetMsgid();
+        if (bStrInMem && !strings[id + offset].strOriginal.empty() &&
+            (strings[id + offset].strOriginal != PODoc.GetMsgid() ||
+            strings[id + offset].strTranslated != PODoc.GetMsgstr()))
+          CLog::Log(LOGDEBUG, "POParser: strings for id %i are different:\n\t"
+          "in memory: %s %s\n\tin file: %s %s\n"
+          "\t%s",
+            id, strings[id + offset].strOriginal, strings[id + offset].strTranslated,
+            PODoc.GetMsgid(), PODoc.GetMsgstr(),
+              strings[id + offset].strTranslated == PODoc.GetMsgid() ? "adding translation" : "ignoring");
+        if (!bStrInMem || strings[id + offset].strTranslated == PODoc.GetMsgid())
+        {
+          strings[id + offset].strTranslated = PODoc.GetMsgstr();
+          strings[id + offset].strOriginal = PODoc.GetMsgid();
+        }
         counter++;
       }
     }
@@ -112,9 +138,9 @@ static bool LoadStr2Mem(const std::string &pathname_in, const std::string &langu
 
   bool useSourceLang = StringUtils::EqualsNoCase(language, LANGUAGE_DEFAULT) || StringUtils::EqualsNoCase(language, LANGUAGE_OLD_DEFAULT);
 
-  int ret = LoadPO(URIUtils::AddFileToFolder(pathname, "strings.po"), strings, encoding, offset, useSourceLang);
-
   LoadPO(URIUtils::AddFileToFolder(pathname, "strings-osmc.po"), strings, encoding, offset, useSourceLang);
+
+  int ret = LoadPO(URIUtils::AddFileToFolder(pathname, "strings.po"), strings, encoding, offset, useSourceLang);
 
   return ret;
 }
