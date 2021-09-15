@@ -87,6 +87,11 @@ RESOLUTION CResolutionUtils::ChooseBestResolution(float fps, int width, int heig
   return res;
 }
 
+static inline bool ModeSort(CVariant i, CVariant j)
+{
+  return (i < j);
+}
+
 void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int height, bool is3D, RESOLUTION &resolution)
 {
   RESOLUTION_INFO curr = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(resolution);
@@ -108,7 +113,8 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     CServiceBroker::GetWinSystem()->GetGfxContext().GetAllowedResolutions(candidates);
     for (const auto& c : candidates)
     {
-      info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(c);
+      info = CDisplaySettings::GetInstance().GetResolutionInfo(c);
+      /* add all progressive 2D modes >= desktop */
       if (info.iScreenHeight >= curr.iScreenHeight && info.iScreenWidth >= curr.iScreenWidth &&
           (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK))
       {
@@ -125,6 +131,8 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     }
   }
 
+  std::sort(indexList.begin(), indexList.end(), ModeSort);
+
   CLog::Log(LOGDEBUG, "[WHITELIST] Searching for an exact resolution with an exact refresh rate");
 
   unsigned int penalty = std::numeric_limits<unsigned int>::max();
@@ -133,7 +141,11 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
   for (const auto& mode : indexList)
   {
     auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-    const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+    const RESOLUTION_INFO info = CDisplaySettings::GetInstance().GetResolutionInfo(i);
+
+    CLog::Log(LOGERROR, "** T99 ** %d/%d vs. %d/%d - %f vs. %f, flags: 0x%x",
+            width, height, info.iScreenWidth, info.iScreenHeight,
+            fps, info.fRefreshRate, info.dwFlags & D3DPRESENTFLAG_MODEMASK);
 
     // allow resolutions that are exact and have the correct refresh rate
     // allow macroblock alignement / padding errors (e.g. 1080 mod16 == 8)
@@ -167,7 +179,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     for (const auto& mode : indexList)
     {
       auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+      const RESOLUTION_INFO info = CDisplaySettings::GetInstance().GetResolutionInfo(i);
 
       // allow resolutions that are exact and have double the refresh rate
       // allow macroblock alignement / padding errors (e.g. 1080 mod16 == 8)
@@ -180,7 +192,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
                   "[WHITELIST] Matched an exact resolution with double the refresh rate {} ({})",
                   info.strMode, i);
         unsigned int pen = abs(info.iScreenHeight - height) + abs(info.iScreenWidth - width);
-        if (pen < penalty)
+        if (pen <= penalty)
         {
           resolution = i;
           found = true;
@@ -206,7 +218,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     for (const auto& mode : indexList)
     {
       auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+      const RESOLUTION_INFO info = CDisplaySettings::GetInstance().GetResolutionInfo(i);
 
       // allow resolutions that are exact and have 2.5 times the refresh rate
       // allow macroblock alignement / padding errors (e.g. 1080 mod16 == 8)
@@ -235,6 +247,31 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
   }
 
 
+  /* Prefer upscaling at the correct framerate if available and specifically whitelisted
+   * eg for displays with 2160p25/50 but no 1080p25/50
+   */
+  if (HasWhitelist())
+  {
+    CLog::Log(LOGDEBUG, "[WHITELIST] Searching for higher resolutions with the exact refreshrate");
+    for (const auto& mode : indexList)
+    {
+      auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
+      const RESOLUTION_INFO info = CDisplaySettings::GetInstance().GetResolutionInfo(i);
+
+      // pick the lowest resolution that has a matching refresh rate
+      if ((info.iScreenHeight >= height || info.iScreenWidth >= width) &&
+        (info.dwFlags & D3DPRESENTFLAG_MODEMASK) == (curr.dwFlags & D3DPRESENTFLAG_MODEMASK) &&
+          MathUtils::FloatEquals(info.fRefreshRate, fps, 0.01f))
+      {
+        resolution = i;
+        CLog::Log(LOGDEBUG, "[WHITELIST] Matched fuzzy whitelisted Resolution %s (%d)", info.strMode.c_str(), i);
+        return;
+      }
+    }
+  }
+
+
+  CLog::Log(LOGDEBUG, "[WHITELIST] No match for a higher resolution with an exact refresh rate");
   CLog::Log(LOGDEBUG, "[WHITELIST] Searching for a desktop resolution with an exact refresh rate");
 
   const RESOLUTION_INFO desktop_info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(CDisplaySettings::GetInstance().GetCurrentResolution());
@@ -242,7 +279,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
   for (const auto& mode : indexList)
   {
     auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-    const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+    const RESOLUTION_INFO info = CDisplaySettings::GetInstance().GetResolutionInfo(i);
 
     // allow resolutions that are desktop resolution but have the correct refresh rate
     if (info.iScreenWidth == desktop_info.iScreenWidth &&
@@ -259,6 +296,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
 
   CLog::Log(LOGDEBUG, "[WHITELIST] No match for a desktop resolution with an exact refresh rate");
 
+
   if (noWhiteList || CServiceBroker::GetSettingsComponent()->GetSettings()->GetBool(
           SETTING_VIDEOSCREEN_WHITELIST_DOUBLEREFRESHRATE))
   {
@@ -268,7 +306,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     for (const auto& mode : indexList)
     {
       auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+      const RESOLUTION_INFO info = CDisplaySettings::GetInstance().GetResolutionInfo(i);
 
       // allow resolutions that are desktop resolution but have double the refresh rate
       if (info.iScreenWidth == desktop_info.iScreenWidth &&
@@ -297,7 +335,7 @@ void CResolutionUtils::FindResolutionFromWhitelist(float fps, int width, int hei
     for (const auto& mode : indexList)
     {
       auto i = CDisplaySettings::GetInstance().GetResFromString(mode.asString());
-      const RESOLUTION_INFO info = CServiceBroker::GetWinSystem()->GetGfxContext().GetResInfo(i);
+      const RESOLUTION_INFO info = CDisplaySettings::GetInstance().GetResolutionInfo(i);
 
       // allow resolutions that are desktop resolution but have 2.5 times the refresh rate
       if (info.iScreenWidth == desktop_info.iScreenWidth &&
