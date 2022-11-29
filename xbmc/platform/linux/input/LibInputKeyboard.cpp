@@ -28,7 +28,7 @@
 
 namespace
 {
-constexpr int REPEAT_DELAY = 400;
+constexpr int REPEAT_DELAY = 750;
 constexpr int REPEAT_RATE = 80;
 
 static const std::map<xkb_keysym_t, XBMCKey> xkbMap =
