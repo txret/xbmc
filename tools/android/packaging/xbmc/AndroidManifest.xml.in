@@ -114,6 +114,12 @@
             <meta-data
                 android:name="android.app.lib_name"
                 android:value="@APP_NAME_LC@" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <receiver android:name=".XBMCBroadcastReceiver"
@@ -140,7 +146,7 @@
             android:authorities="@APP_PACKAGE@.ytdl"
             android:exported="true" />
 
-        <activity android:name=".XBMCSearchableActivity" 
+        <activity android:name=".XBMCSearchableActivity"
                   android:exported="true">
              <intent-filter>
                 <action android:name="android.intent.action.SEARCH" />
