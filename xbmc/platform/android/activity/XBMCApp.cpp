@@ -1258,7 +1258,9 @@ void CXBMCApp::onReceive(CJNIIntent intent)
 
   std::string action = intent.getAction();
   CLog::Log(LOGDEBUG, "CXBMCApp::onReceive - Got intent. Action: {}", action);
-  if (action == "android.intent.action.BATTERY_CHANGED")
+  if (action == "android.intent.action.MAIN" && intent.hasCategory("android.intent.category.HOME"))
+    CServiceBroker::GetGUI()->GetWindowManager().ClearToHome();
+  else if (action == "android.intent.action.BATTERY_CHANGED")
     m_batteryLevel = intent.getIntExtra("level",-1);
   else if (action == "android.intent.action.DREAMING_STOPPED")
   {
@@ -1329,6 +1331,8 @@ void CXBMCApp::onReceive(CJNIIntent intent)
       CLog::Log(LOGINFO, "Got device wakeup intent");
       static_cast<CAndroidPowerSyscall*>(syscall)->SetResumed();
     }
+
+    CServiceBroker::GetGUI()->GetWindowManager().ClearToHome();
 
     if (HasFocus())
     {
@@ -1407,7 +1411,9 @@ void CXBMCApp::onNewIntent(CJNIIntent intent)
   std::string action = intent.getAction();
   CLog::Log(LOGDEBUG, "CXBMCApp::onNewIntent - Got intent. Action: {}", action);
   std::string targetFile = GetFilenameFromIntent(intent);
-  if (!targetFile.empty() &&  (action == "android.intent.action.VIEW" || action == "android.intent.action.GET_CONTENT"))
+  if (action == "android.intent.action.MAIN" && intent.hasCategory("android.intent.category.HOME"))
+    CServiceBroker::GetGUI()->GetWindowManager().ClearToHome();
+  else if (!targetFile.empty() &&  (action == "android.intent.action.VIEW" || action == "android.intent.action.GET_CONTENT"))
   {
     CLog::Log(LOGDEBUG, "-- targetFile: {}", targetFile);
 

@@ -1772,6 +1772,14 @@ void CGUIWindowManager::ClearWindowHistory()
     m_windowHistory.pop_back();
 }
 
+void CGUIWindowManager::ClearToHome()
+{
+  if(CGUIWindow *pCurrentWindow = GetWindow(GetActiveWindow()))
+    CloseWindowSync(pCurrentWindow);
+  ClearWindowHistory();
+  ActivateWindow(WINDOW_HOME);
+}
+
 void CGUIWindowManager::CloseWindowSync(CGUIWindow *window, int nextWindowID /*= 0*/)
 {
   // Abort touch action if active

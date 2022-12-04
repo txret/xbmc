@@ -229,6 +229,8 @@ public:
 #ifdef _DEBUG
   void DumpTextureUse();
 #endif
+
+  void ClearToHome();
 private:
   void RenderPass() const;
 
