@@ -8,7 +8,9 @@
 
 #include "PipewireNode.h"
 
-#include "cores/AudioEngine/Sinks/pipewire/Pipewire.h"
+#include "cores/AudioEngine/Sinks/pipewire/PipewireContext.h"
+#include "cores/AudioEngine/Sinks/pipewire/PipewireCore.h"
+#include "cores/AudioEngine/Sinks/pipewire/PipewireRegistry.h"
 #include "cores/AudioEngine/Sinks/pipewire/PipewireThreadLoop.h"
 #include "utils/StringUtils.h"
 #include "utils/log.h"
@@ -23,23 +25,15 @@ namespace SINK
 namespace PIPEWIRE
 {
 
-CPipewireNode::CPipewireNode(pw_registry* registry, uint32_t id, const char* type)
+CPipewireNode::CPipewireNode(CPipewireRegistry& registry, uint32_t id, const char* type)
   : CPipewireProxy(registry, id, type, PW_VERSION_NODE), m_nodeEvents(CreateNodeEvents())
 {
+  pw_proxy_add_object_listener(m_proxy.get(), &m_objectListener, &m_nodeEvents, this);
 }
 
 CPipewireNode::~CPipewireNode()
 {
   spa_hook_remove(&m_objectListener);
-}
-
-void CPipewireNode::AddListener(void* userdata)
-{
-  m_pipewire = reinterpret_cast<CPipewire*>(userdata);
-
-  pw_proxy_add_object_listener(m_proxy.get(), &m_objectListener, &m_nodeEvents, this);
-
-  CPipewireProxy::AddListener(userdata);
 }
 
 void CPipewireNode::EnumerateFormats()
@@ -56,17 +50,17 @@ void CPipewireNode::EnumerateFormats()
 
 void CPipewireNode::Info(void* userdata, const struct pw_node_info* info)
 {
-  auto node = reinterpret_cast<CPipewireNode*>(userdata);
+  auto& node = *reinterpret_cast<CPipewireNode*>(userdata);
 
-  if (node->m_info)
+  if (node.m_info)
   {
     CLog::Log(LOGDEBUG, "CPipewireNode::{} - node {} changed", __FUNCTION__, info->id);
-    pw_node_info* m_info = node->m_info.get();
+    pw_node_info* m_info = node.m_info.get();
     m_info = pw_node_info_update(m_info, info);
   }
   else
   {
-    node->m_info.reset(pw_node_info_update(node->m_info.get(), info));
+    node.m_info.reset(pw_node_info_update(node.m_info.get(), info));
   }
 }
 
@@ -184,13 +178,12 @@ void CPipewireNode::Param(void* userdata,
                           uint32_t next,
                           const struct spa_pod* param)
 {
-  auto node = reinterpret_cast<CPipewireNode*>(userdata);
-  auto pipewire = node->GetPipewire();
-  auto loop = pipewire->GetThreadLoop();
+  auto& node = *reinterpret_cast<CPipewireNode*>(userdata);
+  auto& loop = node.GetRegistry().GetCore().GetContext().GetThreadLoop();
 
-  node->Parse(SPA_POD_TYPE(param), SPA_POD_BODY(param), SPA_POD_BODY_SIZE(param));
+  node.Parse(SPA_POD_TYPE(param), SPA_POD_BODY(param), SPA_POD_BODY_SIZE(param));
 
-  loop->Signal(false);
+  loop.Signal(false);
 }
 
 pw_node_events CPipewireNode::CreateNodeEvents()

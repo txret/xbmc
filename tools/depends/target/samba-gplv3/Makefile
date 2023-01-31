@@ -10,13 +10,19 @@ DEPS= ../../Makefile.include Makefile SAMBA-GPLV3-VERSION ../../download-files.i
 # vfs_snapper requires dbus, so disable.
 CONFIGURE=./configure --prefix=$(PREFIX) \
           --cross-compile --cross-answers=cross-answers.txt \
-          --without-cluster-support --without-ldap \
-          --without-pam --enable-fhs \
-          --without-winbind --disable-cups --without-ads \
-          --disable-avahi --without-gettext \
-          --without-dnsupdate \
-          --without-ad-dc --without-acl-support \
-          --without-utmp --disable-iprint \
+          --without-cluster-support \
+          --without-ldap \
+          --without-pam \
+          --enable-fhs \
+          --without-winbind \
+          --without-ads \
+          --disable-avahi \
+          --disable-cups \
+          --without-gettext \
+          --without-ad-dc \
+          --without-acl-support \
+          --without-utmp \
+          --disable-iprint \
           --nopyc --nopyo \
           --builtin-libraries=!smbclient,!smbd_base,!smbstatus,ALL \
           --with-shared-modules=!vfs_snapper \
@@ -54,7 +60,7 @@ export PKG_CONFIG_LIBDIR=$(PREFIX)/lib/pkgconfig
 
 all: .installed-$(PLATFORM)
 
-$(PLATFORM): $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE) $(DEPS)
+$(PLATFORM): $(DEPS) | $(TARBALLS_LOCATION)/$(ARCHIVE).$(HASH_TYPE)
 	rm -rf $(PLATFORM); mkdir -p $(PLATFORM)
 	cd $(PLATFORM); $(ARCHIVE_TOOL) $(ARCHIVE_TOOL_FLAGS) $(TARBALLS_LOCATION)/$(ARCHIVE)
 	cd $(PLATFORM); patch -p1 -i ../01-fix-dependencies.patch

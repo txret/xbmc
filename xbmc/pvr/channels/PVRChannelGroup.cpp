@@ -573,7 +573,7 @@ bool CPVRChannelGroup::UpdateFromClient(const std::shared_ptr<CPVRChannelGroupMe
     }
 
     existingMember->SetClientChannelNumber(channel->ClientChannelNumber());
-    existingMember->SetOrder(channel->ClientOrder());
+    existingMember->SetOrder(groupMember->Order());
 
     if (existingMember->NeedsSave())
     {
@@ -855,7 +855,7 @@ bool CPVRChannelGroup::Renumber(RenumberMode mode /* = NORMAL */)
   for (auto& sortedMember : m_sortedMembers)
   {
     currentClientChannelNumber = sortedMember->ClientChannelNumber();
-    if (!currentClientChannelNumber.IsValid())
+    if (m_allChannelsGroup && !currentClientChannelNumber.IsValid())
       currentClientChannelNumber =
           m_allChannelsGroup->GetClientChannelNumber(sortedMember->Channel());
 

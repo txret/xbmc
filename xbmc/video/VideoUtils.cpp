@@ -410,6 +410,9 @@ bool IsItemPlayable(const CFileItem& item)
   // Include playlists located at one of the possible video/mixed playlist locations
   if (item.IsPlayList())
   {
+    if (StringUtils::StartsWithNoCase(item.GetMimeType(), "video/"))
+      return true;
+
     if (StringUtils::StartsWithNoCase(item.GetPath(), "special://videoplaylists/") ||
         StringUtils::StartsWithNoCase(item.GetPath(), "special://profile/playlists/video/") ||
         StringUtils::StartsWithNoCase(item.GetPath(), "special://profile/playlists/mixed/"))
@@ -450,10 +453,11 @@ bool IsItemPlayable(const CFileItem& item)
   {
     return true;
   }
-  else if (!item.m_bIsShareOrDrive && item.m_bIsFolder)
+  else if (item.m_bIsFolder)
   {
     // Not a video-specific folder (like file:// or nfs://). Allow play if context is Video window.
-    if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VIDEO_NAV)
+    if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VIDEO_NAV &&
+        item.GetPath() != "add") // Exclude "Add video source" item
       return true;
   }
 

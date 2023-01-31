@@ -787,6 +787,9 @@ bool IsItemPlayable(const CFileItem& item)
   // Include playlists located at one of the possible music playlist locations
   if (item.IsPlayList())
   {
+    if (StringUtils::StartsWithNoCase(item.GetMimeType(), "audio/"))
+      return true;
+
     if (StringUtils::StartsWithNoCase(item.GetPath(), "special://musicplaylists/") ||
         StringUtils::StartsWithNoCase(item.GetPath(), "special://profile/playlists/music/"))
       return true;
@@ -818,10 +821,11 @@ bool IsItemPlayable(const CFileItem& item)
     return true;
   else if (!item.m_bIsFolder && item.IsAudio())
     return true;
-  else if (!item.m_bIsShareOrDrive && item.m_bIsFolder)
+  else if (item.m_bIsFolder)
   {
     // Not a music-specific folder (just file:// or nfs://). Allow play if context is Music window.
-    if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_MUSIC_NAV)
+    if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_MUSIC_NAV &&
+        item.GetPath() != "add") // Exclude "Add music source" item
       return true;
   }
   return false;

@@ -11,10 +11,16 @@
 #include "cores/AudioEngine/Interfaces/AESink.h"
 #include "cores/AudioEngine/Utils/AEDeviceInfo.h"
 
+#include <chrono>
+
 namespace AE
 {
 namespace SINK
 {
+namespace PIPEWIRE
+{
+class CPipewireStream;
+}
 
 class CAESinkPipewire : public IAESink
 {
@@ -41,7 +47,9 @@ public:
 
 private:
   AEAudioFormat m_format;
-  double m_latency;
+  std::chrono::duration<double, std::ratio<1>> m_latency;
+
+  std::unique_ptr<PIPEWIRE::CPipewireStream> m_stream;
 };
 
 } // namespace SINK

@@ -295,8 +295,7 @@ bool CContext::CreateContext()
       featureLevels.push_back(D3D_FEATURE_LEVEL_12_1);
       featureLevels.push_back(D3D_FEATURE_LEVEL_12_0);
     }
-    if (CSysInfo::IsWindowsVersionAtLeast(CSysInfo::WindowsVersionWin8))
-      featureLevels.push_back(D3D_FEATURE_LEVEL_11_1);
+    featureLevels.push_back(D3D_FEATURE_LEVEL_11_1);
     featureLevels.push_back(D3D_FEATURE_LEVEL_11_0);
     featureLevels.push_back(D3D_FEATURE_LEVEL_10_1);
     featureLevels.push_back(D3D_FEATURE_LEVEL_10_0);
@@ -1088,7 +1087,7 @@ static bool HasAMDH264SDiBug(AVCodecContext* avctx)
     return false;
 
   // AMD card has issues with SD H264 interlaced content
-  return (avctx->height <= 576 && avctx->codec_id == AV_CODEC_ID_H264 &&
+  return (avctx->width <= 720 && avctx->height <= 576 && avctx->codec_id == AV_CODEC_ID_H264 &&
           avctx->field_order != AV_FIELD_PROGRESSIVE);
 }
 

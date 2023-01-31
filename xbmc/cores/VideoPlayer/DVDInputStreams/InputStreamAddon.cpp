@@ -12,6 +12,7 @@
 #include "addons/addoninfo/AddonType.h"
 #include "addons/binary-addons/AddonDll.h"
 #include "addons/kodi-dev-kit/include/kodi/addon-instance/VideoCodec.h"
+#include "cores/FFmpeg.h"
 #include "cores/VideoPlayer/DVDDemuxers/DVDDemux.h"
 #include "cores/VideoPlayer/DVDDemuxers/DVDDemuxUtils.h"
 #include "cores/VideoPlayer/Interface/DemuxCrypto.h"
@@ -392,7 +393,7 @@ KODI_HANDLE CInputStreamAddon::cb_get_stream_transfer(KODI_HANDLE handle,
     return nullptr;
 
   std::string codecName(stream->m_codecName);
-  AVCodec* codec = nullptr;
+  const AVCodec* codec = nullptr;
 
   if (stream->m_streamType != INPUTSTREAM_TYPE_TELETEXT &&
       stream->m_streamType != INPUTSTREAM_TYPE_RDS && stream->m_streamType != INPUTSTREAM_TYPE_ID3)
@@ -530,7 +531,7 @@ KODI_HANDLE CInputStreamAddon::cb_get_stream_transfer(KODI_HANDLE handle,
 
   if (stream->m_ExtraData && stream->m_ExtraSize)
   {
-    demuxStream->ExtraData = new uint8_t[stream->m_ExtraSize];
+    demuxStream->ExtraData = std::make_unique<uint8_t[]>(stream->m_ExtraSize);
     demuxStream->ExtraSize = stream->m_ExtraSize;
     for (unsigned int j = 0; j < stream->m_ExtraSize; ++j)
       demuxStream->ExtraData[j] = stream->m_ExtraData[j];
@@ -745,7 +746,7 @@ void CInputStreamAddon::DetectScreenResolution()
     // So we have to provide the max resolution info before the playback take place
     // in order to allow addon to provide in the demuxer the best stream resolution
     // that can fit the supported screen resolution (changed when playback start).
-    CResolutionUtils::GetMaxAllowedResolution(maxWidth, maxHeight);
+    CResolutionUtils::GetMaxAllowedScreenResolution(maxWidth, maxHeight);
 
     SetVideoResolution(videoWidth, videoHeight, maxWidth, maxHeight);
 
