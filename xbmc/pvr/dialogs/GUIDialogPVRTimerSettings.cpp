@@ -445,6 +445,23 @@ void CGUIDialogPVRTimerSettings::OnSettingChanged(const std::shared_ptr<const CS
     {
       m_timerType = it->second;
 
+      // reset certain settings to the defaults of the new timer type
+
+      if (m_timerType->SupportsPriority())
+        m_iPriority = m_timerType->GetPriorityDefault();
+
+      if (m_timerType->SupportsLifetime())
+        m_iLifetime = m_timerType->GetLifetimeDefault();
+
+      if (m_timerType->SupportsMaxRecordings())
+        m_iMaxRecordings = m_timerType->GetMaxRecordingsDefault();
+
+      if (m_timerType->SupportsRecordingGroup())
+        m_iRecordingGroup = m_timerType->GetRecordingGroupDefault();
+
+      if (m_timerType->SupportsRecordOnlyNewEpisodes())
+        m_iPreventDupEpisodes = m_timerType->GetPreventDuplicateEpisodesDefault();
+
       if (m_timerType->IsTimerRule() && (m_iWeekdays == PVR_WEEKDAY_ALLDAYS))
         SetButtonLabels(); // update "Any day" vs. "Every day"
     }
@@ -580,6 +597,11 @@ void CGUIDialogPVRTimerSettings::OnSettingAction(const std::shared_ptr<const CSe
 
 bool CGUIDialogPVRTimerSettings::Validate()
 {
+  // @todo: Timer rules may have no date (time-only), so we can't check those for now.
+  //        We need to extend the api with additional attributes to properly fix this
+  if (m_timerType->IsTimerRule())
+    return true;
+
   bool bStartAnyTime = m_bStartAnyTime;
   bool bEndAnyTime = m_bEndAnyTime;
 
@@ -594,10 +616,7 @@ bool CGUIDialogPVRTimerSettings::Validate()
   // Begin and end time
   if (!bStartAnyTime && !bEndAnyTime)
   {
-    // Not in the set of having neither or both of start clock entry and
-    // end clock entry while also being a timer rule
-    if (!(m_timerType->SupportsStartTime() == m_timerType->SupportsEndTime() &&
-          m_timerType->IsTimerRule()) &&
+    if (m_timerType->SupportsStartTime() && m_timerType->SupportsEndTime() &&
         m_endLocalTime < m_startLocalTime)
     {
       HELPERS::ShowOKDialogText(CVariant{19065}, // "Timer settings"

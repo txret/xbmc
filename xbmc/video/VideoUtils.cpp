@@ -173,12 +173,30 @@ void CAsyncGetItemsForPlaylist::GetItemsForPlaylist(const std::shared_ptr<CFileI
           fileFormatter.FormatLabels(i.get());
       }
 
-      const SortDescription sortDesc = GetSortDescription(*state, items);
+      SortDescription sortDesc;
+      if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == viewStateWindowId)
+        sortDesc = state->GetSortMethod();
+      else
+        sortDesc = GetSortDescription(*state, items);
 
       if (sortDesc.sortBy == SortByLabel)
         items.ClearSortState();
 
       items.Sort(sortDesc);
+    }
+
+    if (items.GetContent().empty() && !items.IsVideoDb() && !items.IsVirtualDirectoryRoot() &&
+        !items.IsSourcesPath() && !items.IsLibraryFolder())
+    {
+      CVideoDatabase db;
+      if (db.Open())
+      {
+        std::string content = db.GetContentForPath(items.GetPath());
+        if (content.empty() && !items.IsPlugin())
+          content = "files";
+
+        items.SetContent(content);
+      }
     }
 
     if (m_resume)
@@ -222,6 +240,7 @@ void CAsyncGetItemsForPlaylist::GetItemsForPlaylist(const std::shared_ptr<CFileI
 
     const bool unwatchedOnly = watchedMode == WatchedModeUnwatched;
     const bool watchedOnly = watchedMode == WatchedModeWatched;
+    bool fetchedPlayCounts = false;
     for (const auto& i : items)
     {
       if (i->m_bIsFolder)
@@ -231,11 +250,25 @@ void CAsyncGetItemsForPlaylist::GetItemsForPlaylist(const std::shared_ptr<CFileI
         if (StringUtils::EndsWithNoCase(path, "sample")) // skip sample folders
           continue;
       }
-      else if (i->HasVideoInfoTag() &&
-               ((unwatchedOnly && i->GetVideoInfoTag()->GetPlayCount() > 0) ||
-                (watchedOnly && i->GetVideoInfoTag()->GetPlayCount() <= 0)))
-        continue;
-
+      else
+      {
+        if (!fetchedPlayCounts &&
+            (!i->HasVideoInfoTag() || !i->GetVideoInfoTag()->IsPlayCountSet()))
+        {
+          CVideoDatabase db;
+          if (db.Open())
+          {
+            fetchedPlayCounts = true;
+            db.GetPlayCounts(items.GetPath(), items);
+          }
+        }
+        if (i->HasVideoInfoTag() && i->GetVideoInfoTag()->IsPlayCountSet())
+        {
+          const int playCount = i->GetVideoInfoTag()->GetPlayCount();
+          if ((unwatchedOnly && playCount > 0) || (watchedOnly && playCount <= 0))
+            continue;
+        }
+      }
       GetItemsForPlaylist(i);
     }
   }
@@ -426,8 +459,11 @@ bool IsItemPlayable(const CFileItem& item)
         StringUtils::StartsWith(item.GetPath(), StringUtils::Format("{}/mixed/", path)))
       return true;
 
-    // Unknown location. Type cannot be determined.
-    return false;
+    if (!item.m_bIsFolder)
+    {
+      // Unknown location. Type cannot be determined for non-folder items.
+      return false;
+    }
   }
 
   if (item.m_bIsFolder &&

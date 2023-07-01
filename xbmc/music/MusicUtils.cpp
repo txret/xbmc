@@ -553,7 +553,11 @@ void CAsyncGetItemsForPlaylist::GetItemsForPlaylist(const std::shared_ptr<CFileI
           fileFormatter.FormatLabels(i.get());
       }
 
-      const SortDescription sortDesc = GetSortDescription(*state, items);
+      SortDescription sortDesc;
+      if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_MUSIC_NAV)
+        sortDesc = state->GetSortMethod();
+      else
+        sortDesc = GetSortDescription(*state, items);
 
       if (sortDesc.sortBy == SortByLabel)
         items.ClearSortState();
@@ -801,8 +805,11 @@ bool IsItemPlayable(const CFileItem& item)
     if (StringUtils::StartsWith(item.GetPath(), StringUtils::Format("{}/music/", path)))
       return true;
 
-    // Unknown location. Type cannot be determined.
-    return false;
+    if (!item.m_bIsFolder)
+    {
+      // Unknown location. Type cannot be determined for non-folder items.
+      return false;
+    }
   }
 
   if (item.m_bIsFolder &&
