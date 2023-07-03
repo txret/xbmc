@@ -64,6 +64,7 @@ public:
   void Fetch(std::vector<CGUIListItemPtr> &items) override;
   void Reset() override;
   bool OnClick(const CGUIListItemPtr &item) override;
+  bool OnPlay(const CGUIListItemPtr& item) override;
   bool OnInfo(const CGUIListItemPtr &item) override;
   bool OnContextMenu(const CGUIListItemPtr &item) override;
   bool IsUpdating() const override;
@@ -73,7 +74,6 @@ public:
   void OnJobComplete(unsigned int jobID, bool success, CJob *job) override;
 private:
   UpdateState      m_updateState;
-  bool             m_isAnnounced;
   unsigned int     m_jobID;
   KODI::GUILIB::GUIINFO::CGUIInfoLabel m_url;
   KODI::GUILIB::GUIINFO::CGUIInfoLabel m_target;
@@ -96,4 +96,7 @@ private:
   void OnPVRManagerEvent(const PVR::PVREvent& event);
   void OnFavouritesEvent(const CFavouritesService::FavouritesUpdated& event);
   std::string GetTarget(const CFileItem& item) const;
+
+  CCriticalSection m_subscriptionSection;
+  bool m_isSubscribed{false};
 };

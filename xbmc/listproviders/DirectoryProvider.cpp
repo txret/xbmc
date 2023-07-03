@@ -11,10 +11,10 @@
 #include "ContextMenuManager.h"
 #include "FileItem.h"
 #include "ServiceBroker.h"
-#include "Util.h"
 #include "addons/AddonManager.h"
 #include "addons/gui/GUIDialogAddonInfo.h"
 #include "favourites/FavouritesService.h"
+#include "favourites/FavouritesURL.h"
 #include "filesystem/Directory.h"
 #include "guilib/GUIComponent.h"
 #include "guilib/GUIWindowManager.h"
@@ -27,7 +27,9 @@
 #include "pvr/guilib/PVRGUIActionsUtils.h"
 #include "settings/Settings.h"
 #include "settings/SettingsComponent.h"
+#include "utils/ExecString.h"
 #include "utils/JobManager.h"
+#include "utils/PlayerUtils.h"
 #include "utils/SortUtils.h"
 #include "utils/URIUtils.h"
 #include "utils/Variant.h"
@@ -155,7 +157,6 @@ private:
 CDirectoryProvider::CDirectoryProvider(const TiXmlElement *element, int parentID)
  : IListProvider(parentID),
    m_updateState(OK),
-   m_isAnnounced(false),
    m_jobID(0),
    m_currentLimit(0)
 {
@@ -185,7 +186,6 @@ CDirectoryProvider::CDirectoryProvider(const TiXmlElement *element, int parentID
 CDirectoryProvider::CDirectoryProvider(const CDirectoryProvider& other)
   : IListProvider(other.m_parentID),
     m_updateState(INVALIDATED),
-    m_isAnnounced(false),
     m_jobID(0),
     m_url(other.m_url),
     m_target(other.m_target),
@@ -350,22 +350,25 @@ void CDirectoryProvider::OnFavouritesEvent(const CFavouritesService::FavouritesU
 
 void CDirectoryProvider::Reset()
 {
-  std::unique_lock<CCriticalSection> lock(m_section);
-  if (m_jobID)
-    CServiceBroker::GetJobManager()->CancelJob(m_jobID);
-  m_jobID = 0;
-  m_items.clear();
-  m_currentTarget.clear();
-  m_currentUrl.clear();
-  m_itemTypes.clear();
-  m_currentSort.sortBy = SortByNone;
-  m_currentSort.sortOrder = SortOrderAscending;
-  m_currentLimit = 0;
-  m_updateState = OK;
-
-  if (m_isAnnounced)
   {
-    m_isAnnounced = false;
+    std::unique_lock<CCriticalSection> lock(m_section);
+    if (m_jobID)
+      CServiceBroker::GetJobManager()->CancelJob(m_jobID);
+    m_jobID = 0;
+    m_items.clear();
+    m_currentTarget.clear();
+    m_currentUrl.clear();
+    m_itemTypes.clear();
+    m_currentSort.sortBy = SortByNone;
+    m_currentSort.sortOrder = SortOrderAscending;
+    m_currentLimit = 0;
+    m_updateState = OK;
+  }
+
+  std::unique_lock<CCriticalSection> subscriptionLock(m_subscriptionSection);
+  if (m_isSubscribed)
+  {
+    m_isSubscribed = false;
     CServiceBroker::GetAnnouncementManager()->RemoveAnnouncer(this);
     CServiceBroker::GetFavouritesService().Events().Unsubscribe(this);
     CServiceBroker::GetRepositoryUpdater().Events().Unsubscribe(this);
@@ -408,6 +411,21 @@ std::string CDirectoryProvider::GetTarget(const CFileItem& item) const
   return target;
 }
 
+namespace
+{
+bool ExecuteAction(const std::string& execute)
+{
+  if (!execute.empty())
+  {
+    CGUIMessage message(GUI_MSG_EXECUTE, 0, 0);
+    message.SetStringParam(execute);
+    CServiceBroker::GetGUI()->GetWindowManager().SendMessage(message);
+    return true;
+  }
+  return false;
+}
+} // namespace
+
 bool CDirectoryProvider::OnClick(const CGUIListItemPtr &item)
 {
   CFileItem fileItem(*std::static_pointer_cast<CFileItem>(item));
@@ -420,16 +438,44 @@ bool CDirectoryProvider::OnClick(const CGUIListItemPtr &item)
   if (fileItem.HasProperty("node.target_url"))
     fileItem.SetPath(fileItem.GetProperty("node.target_url").asString());
 
-  // grab the execute string
-  const std::string execute = CUtil::GetExecPath(fileItem, GetTarget(fileItem));
-  if (!execute.empty())
+  // grab and execute the execute string
+  return ExecuteAction(CExecString(fileItem, GetTarget(fileItem)).GetExecString());
+}
+
+bool CDirectoryProvider::OnPlay(const CGUIListItemPtr& item)
+{
+  CFileItem fileItem(*std::static_pointer_cast<CFileItem>(item));
+
+  if (fileItem.IsFavourite())
   {
-    CGUIMessage message(GUI_MSG_EXECUTE, 0, 0);
-    message.SetStringParam(execute);
-    CServiceBroker::GetGUI()->GetWindowManager().SendMessage(message);
-    return true;
+    // Resolve the favourite
+    const CFavouritesURL url(fileItem.GetPath());
+    if (url.IsValid())
+    {
+      // If action is playmedia, just play it
+      if (url.GetAction() == CFavouritesURL::Action::PLAY_MEDIA)
+        return ExecuteAction(url.GetExecString());
+
+      CFileItem targetItem(url.GetTarget(), url.IsDir());
+      fileItem = targetItem;
+    }
   }
-  return false;
+
+  if (CPlayerUtils::IsItemPlayable(fileItem))
+  {
+    CExecString exec(fileItem, {});
+    if (exec.GetFunction() == "playmedia")
+    {
+      return ExecuteAction(exec.GetExecString());
+    }
+    else
+    {
+      // build and execute a playmedia execute string
+      exec = CExecString("PlayMedia", {StringUtils::Paramify(fileItem.GetPath())});
+      return ExecuteAction(exec.GetExecString());
+    }
+  }
+  return true;
 }
 
 bool CDirectoryProvider::OnInfo(const CGUIListItemPtr& item)
@@ -484,16 +530,19 @@ bool CDirectoryProvider::IsUpdating() const
 
 bool CDirectoryProvider::UpdateURL()
 {
-  std::unique_lock<CCriticalSection> lock(m_section);
-  std::string value(m_url.GetLabel(m_parentID, false));
-  if (value == m_currentUrl)
-    return false;
-
-  m_currentUrl = value;
-
-  if (!m_isAnnounced)
   {
-    m_isAnnounced = true;
+    std::unique_lock<CCriticalSection> lock(m_section);
+    std::string value(m_url.GetLabel(m_parentID, false));
+    if (value == m_currentUrl)
+      return false;
+
+    m_currentUrl = value;
+  }
+
+  std::unique_lock<CCriticalSection> subscriptionLock(m_subscriptionSection);
+  if (!m_isSubscribed)
+  {
+    m_isSubscribed = true;
     CServiceBroker::GetAnnouncementManager()->AddAnnouncer(this);
     CServiceBroker::GetAddonMgr().Events().Subscribe(this, &CDirectoryProvider::OnAddonEvent);
     CServiceBroker::GetRepositoryUpdater().Events().Subscribe(this, &CDirectoryProvider::OnAddonRepositoryEvent);

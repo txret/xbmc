@@ -2264,6 +2264,7 @@ msgctxt "#479"
 msgid "Skin & language"
 msgstr ""
 
+#: system/peripherals.xml
 #: system/settings/settings.xml
 #: addons/skin.estuary/xml/Includes.xml
 msgctxt "#480"
@@ -5717,6 +5718,8 @@ msgstr ""
 #empty strings from id 12015 to 12020
 
 #. Label of various controls for starting playback from the beginning
+#: addons/skin.estuary/xml/SkinSettings.xml
+#: addons/skin.estuary/xml/Variables.xml
 #: xbmc/Autorun.cpp
 #: xbmc/pvr/PVRContextMenus.cpp
 #: xbmc/pvr/PVRGUIActions.cpp
@@ -6553,7 +6556,7 @@ msgctxt "#13205"
 msgid "Unknown"
 msgstr ""
 
-#. unused?
+#. Label in the game OSD to overwrite an existing savestate
 msgctxt "#13206"
 msgid "Overwrite"
 msgstr ""
@@ -6993,7 +6996,15 @@ msgctxt "#13361"
 msgid "Enable voice"
 msgstr ""
 
-#empty strings from id 13362 to 13374
+#. label for resume context menu item for video folders (like a TV show or a single season of a TV show)
+#: addons/skin.estuary/xml/SkinSettings.xml
+#: addons/skin.estuary/xml/Variables.xml
+#: xbmc/video/windows/GUIWindowVideoBase.cpp
+msgctxt "#13362"
+msgid "Continue watching"
+msgstr ""
+
+#empty strings from id 13363 to 13374
 
 msgctxt "#13375"
 msgid "Enable device"
@@ -8772,44 +8783,43 @@ msgid "Action"
 msgstr ""
 
 #. Label for an action associated with a favourite.
-#: xbmc/Util.cpp
+#: xbmc/favourites/FavouritesURL.cpp
 msgctxt "#15218"
 msgid "Play media"
 msgstr ""
 
 #. Label for an action associated with a favourite
-#: xbmc/Util.cpp
+#: xbmc/favourites/FavouritesURL.cpp
 msgctxt "#15219"
 msgid "Show picture"
 msgstr ""
 
 #. Label for an action associated with a favourite. Placeholder will be filled with the name of the window the favourite's content will be displayed in.
-#: xbmc/favourites/FavouritesService.cpp
-#: xbmc/Util.cpp
+#: xbmc/favourites/FavouritesURL.cpp
 msgctxt "#15220"
 msgid "Show content in \"{}\""
 msgstr ""
 
 #. Label for an action associated with a favourite
-#: xbmc/Util.cpp
+#: xbmc/favourites/FavouritesURL.cpp
 msgctxt "#15221"
 msgid "Execute script"
 msgstr ""
 
 #. Label for an action associated with a favourite
-#: xbmc/Util.cpp
+#: xbmc/favourites/FavouritesURL.cpp
 msgctxt "#15222"
 msgid "Execute Android app"
 msgstr ""
 
 #. Label for an action associated with a favourite
-#: xbmc/Util.cpp
+#: xbmc/favourites/FavouritesURL.cpp
 msgctxt "#15223"
 msgid "Execute add-on"
 msgstr ""
 
 #. Label for an action associated with a favourite
-#: xbmc/Util.cpp
+#: xbmc/favourites/FavouritesURL.cpp
 msgctxt "#15224"
 msgid "Other / Unknown"
 msgstr ""
@@ -8866,19 +8876,25 @@ msgctxt "#15313"
 msgid "Login to RetroAchievements"
 msgstr ""
 
-#. Label for button in the in-game savestate manager
+#. Label for button which creates a new savestate in the in-game savestate manager
 #: xbmc/games/dialogs/osd/DialogInGameSaves.cpp
 msgctxt "#15314"
-msgid "Save progress"
+msgid "Save"
 msgstr ""
 
-#. Caption for "Save progress" button in the in-game savestate manager
+#. Caption for "Save" button in the in-game savestate manager
 #: xbmc/games/dialogs/osd/DialogInGameSaves.cpp
 msgctxt "#15315"
-msgid "Save progress to new save file"
+msgid "Save progress to a new save file"
 msgstr ""
 
-#empty strings from id 15316 to 15999
+#. Label for savestates created automatically by "Autosave" function
+#: xbmc/cores/RetroPlayer/playback/ReversiblePlayback.cpp
+msgctxt "#15316"
+msgid "Autosave"
+msgstr ""
+
+#empty strings from id 15317 to 15999
 
 #: system/settings/settings.xml
 msgctxt "#16000"
@@ -18292,7 +18308,7 @@ msgstr ""
 
 #: system/settings/settings.xml
 msgctxt "#35203"
-msgid "Enable rewind if supported"
+msgid "Enable rewind (if supported)"
 msgstr ""
 
 #: system/settings/settings.xml
@@ -18398,7 +18414,7 @@ msgstr ""
 #. Title of the game OSD menu
 #: addons/skin.estuary/xml/GameOSD.xml
 msgctxt "#35221"
-msgid "Game Menu"
+msgid "Menu"
 msgstr ""
 
 #. Label of button in the in-game menu for stopping game playback
@@ -18497,10 +18513,10 @@ msgstr ""
 
 #empty strings from id 35237 to 35248
 
-#. Button to open the saved game manager from the game OSD
+#. Button to open the savestate manager from the game OSD
 #: addons/skin.estuary/xml/GameOSD.xml
 msgctxt "#35249"
-msgid "Saved games"
+msgid "Save / Load"
 msgstr ""
 
 #: xbmc/windows/GUIMediaWindow.cpp
@@ -18520,7 +18536,7 @@ msgstr ""
 
 #: system/settings/settings.xml
 msgctxt "#35253"
-msgid "Enable autosave if supported"
+msgid "Enable autosave (if supported)"
 msgstr ""
 
 #: system/settings/settings.xml
@@ -18528,7 +18544,11 @@ msgctxt "#35254"
 msgid "Save the game automatically during game play, if supported. Resume playing where you left off."
 msgstr ""
 
-#empty string with id 35255
+#. Label for showing which emulator the game was saved with
+#: system/settings/settings.xml
+msgctxt "#35255"
+msgid "Saved with:"
+msgstr ""
 
 #. Error message when a game client fails to install when a game is being launched
 #: xbmc/games/dialogs/GUIDialogSelectGameClient.cpp
@@ -18564,7 +18584,7 @@ msgstr ""
 #. Button for creating a new save state from the select savestate dialog
 #: xbmc/games/dialogs/GUIDialogSelectSavestate.cpp
 msgctxt "#35261"
-msgid "New game"
+msgid "New"
 msgstr ""
 
 #. Help text for RetroAchievements username input setting
@@ -21674,11 +21694,7 @@ msgctxt "#36636"
 msgid "You must first enter a password before web server authentication can be enabled."
 msgstr ""
 
-#. Text in confirm dialog when installing addon from zip
-#: xbmc/addons/GUIWindowAddonBrowser.cpp
-msgctxt "#36637"
-msgid "Note that add-ons installed from zip (excluding served repositories) will not auto-update and must be manually updated. Would you like to proceed?"
-msgstr ""
+#empty string with id 36637
 
 #. Menuitem at "Settings -> System -> Add-ons"
 #: ./system/settings/settings.xml

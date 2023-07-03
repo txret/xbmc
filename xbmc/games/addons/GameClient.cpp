@@ -106,6 +106,8 @@ CGameClient::CGameClient(const ADDON::AddonInfoPtr& addonInfo)
       addonInfo->Type(AddonType::GAMEDLL)->GetValue(GAME_PROPERTY_SUPPORTS_VFS).asBoolean();
   m_bSupportsStandalone =
       addonInfo->Type(AddonType::GAMEDLL)->GetValue(GAME_PROPERTY_SUPPORTS_STANDALONE).asBoolean();
+
+  std::tie(m_emulatorName, m_platforms) = ParseLibretroName(Name());
 }
 
 CGameClient::~CGameClient(void)
@@ -274,6 +276,9 @@ bool CGameClient::OpenStandalone(RETRO::IStreamManager& streamManager, IGameInpu
 
   GAME_ERROR error = GAME_ERROR_FAILED;
 
+  // Loading the game might require the stream subsystem to be initialized
+  Streams().Initialize(streamManager);
+
   try
   {
     LogError(error = m_ifc.game->toAddon->LoadStandalone(m_ifc.game), "LoadStandalone()");
@@ -286,11 +291,13 @@ bool CGameClient::OpenStandalone(RETRO::IStreamManager& streamManager, IGameInpu
   if (error != GAME_ERROR_NO_ERROR)
   {
     NotifyError(error);
+    Streams().Deinitialize();
     return false;
   }
 
   if (!InitializeGameplay("", streamManager, input))
   {
+    Streams().Deinitialize();
     return false;
   }
 
@@ -688,4 +695,38 @@ bool CGameClient::cb_input_event(KODI_HANDLE kodiInstance, const game_input_even
     return false;
 
   return gameClient->Input().ReceiveInputEvent(*event);
+}
+
+std::pair<std::string, std::string> CGameClient::ParseLibretroName(const std::string& addonName)
+{
+  std::string emulatorName;
+  std::string platforms;
+
+  // libretro has a de-facto standard for naming their cores. If the
+  // core emulates one or more platforms, then the format is:
+  //
+  //   "Platforms (Emulator name)"
+  //
+  // Otherwise, the format is just the name with no platforms:
+  //
+  //   "Emulator name"
+  //
+  // The has been observed for all 130 cores we package.
+  //
+  size_t beginPos = addonName.find('(');
+  size_t endPos = addonName.find(')');
+
+  if (beginPos != std::string::npos && endPos != std::string::npos && beginPos < endPos)
+  {
+    emulatorName = addonName.substr(beginPos + 1, endPos - beginPos - 1);
+    platforms = addonName.substr(0, beginPos);
+    StringUtils::TrimRight(platforms);
+  }
+  else
+  {
+    emulatorName = addonName;
+    platforms.clear();
+  }
+
+  return std::make_pair(emulatorName, platforms);
 }

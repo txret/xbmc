@@ -71,6 +71,17 @@ bool CRPBaseRenderer::IsVisible() const
   return m_renderFrameCount <= m_lastRender + VISIBLE_DURATION_FRAME_COUNT;
 }
 
+IRenderBuffer* CRPBaseRenderer::GetRenderBuffer() const
+{
+  if (m_renderBuffer != nullptr)
+  {
+    m_renderBuffer->Acquire();
+    return m_renderBuffer;
+  }
+
+  return nullptr;
+}
+
 void CRPBaseRenderer::SetBuffer(IRenderBuffer* buffer)
 {
   if (m_renderBuffer != buffer)
@@ -119,6 +130,11 @@ void CRPBaseRenderer::SetStretchMode(STRETCHMODE stretchMode)
 void CRPBaseRenderer::SetRenderRotation(unsigned int rotationDegCCW)
 {
   m_renderSettings.VideoSettings().SetRenderRotation(rotationDegCCW);
+}
+
+void CRPBaseRenderer::SetPixels(const std::string& pixelPath)
+{
+  m_renderSettings.VideoSettings().SetPixels(pixelPath);
 }
 
 void CRPBaseRenderer::ManageRenderArea(const IRenderBuffer& renderBuffer)
@@ -192,7 +208,8 @@ void CRPBaseRenderer::PreRender(bool clear)
 
   // Clear screen
   if (clear)
-    m_context.Clear(m_context.UseLimitedColor() ? 0x101010 : 0);
+    m_context.Clear(m_context.UseLimitedColor() ? UTILS::COLOR::LIMITED_BLACK
+                                                : UTILS::COLOR::BLACK);
 }
 
 void CRPBaseRenderer::PostRender()

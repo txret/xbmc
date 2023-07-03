@@ -13,9 +13,6 @@
 #include "addons/Skin.h"
 #include "addons/addoninfo/AddonType.h"
 #include "application/AppParams.h"
-#if defined(TARGET_ANDROID)
-#include "platform/android/activity/AndroidFeatures.h"
-#endif // defined(TARGET_ANDROID)
 #include "cores/AudioEngine/Engines/ActiveAE/ActiveAESettings.h"
 #include "ServiceBroker.h"
 #include "GUIPassword.h"
@@ -103,14 +100,6 @@ bool HasPowerOffFeature(const std::string& condition,
                         void* data)
 {
   return CServiceBroker::GetPeripherals().SupportsFeature(PERIPHERALS::FEATURE_POWER_OFF);
-}
-
-bool IsFullscreen(const std::string& condition,
-                  const std::string& value,
-                  const SettingConstPtr& setting,
-                  void* data)
-{
-  return CServiceBroker::GetWinSystem()->IsFullScreen();
 }
 
 bool IsHDRDisplay(const std::string& condition,
@@ -450,7 +439,6 @@ void CSettingConditions::Initialize()
   m_complexConditions.emplace("hasrumblefeature", HasRumbleFeature);
   m_complexConditions.emplace("hasrumblecontroller", HasRumbleController);
   m_complexConditions.emplace("haspowerofffeature", HasPowerOffFeature);
-  m_complexConditions.emplace("isfullscreen", IsFullscreen);
   m_complexConditions.emplace("ishdrdisplay", IsHDRDisplay);
   m_complexConditions.emplace("ismasteruser", IsMasterUser);
   m_complexConditions.emplace("hassubtitlesfontextensions", HasSubtitlesFontExtensions);

@@ -61,7 +61,8 @@ bool CVideoRemoveResumePoint::IsVisible(const CFileItem& itemIn) const
   if (item.IsDeleted()) // e.g. trashed pvr recording
     return false;
 
-  return CGUIWindowVideoBase::HasResumeItemOffset(&item);
+  // Folders don't have a resume point
+  return !item.m_bIsFolder && VIDEO_UTILS::GetItemResumeInformation(item).isResumable;
 }
 
 bool CVideoRemoveResumePoint::Execute(const std::shared_ptr<CFileItem>& item) const
@@ -73,6 +74,9 @@ bool CVideoRemoveResumePoint::Execute(const std::shared_ptr<CFileItem>& item) co
 bool CVideoMarkWatched::IsVisible(const CFileItem& item) const
 {
   if (item.IsDeleted()) // e.g. trashed pvr recording
+    return false;
+
+  if (item.m_bIsFolder && item.IsPlugin()) // we cannot manage plugin folder's watched state
     return false;
 
   if (item.m_bIsFolder) // Only allow video db content, video and recording folders to be updated recursively
@@ -99,6 +103,9 @@ bool CVideoMarkWatched::Execute(const std::shared_ptr<CFileItem>& item) const
 bool CVideoMarkUnWatched::IsVisible(const CFileItem& item) const
 {
   if (item.IsDeleted()) // e.g. trashed pvr recording
+    return false;
+
+  if (item.m_bIsFolder && item.IsPlugin()) // we cannot manage plugin folder's watched state
     return false;
 
   if (item.m_bIsFolder) // Only allow video db content, video and recording folders to be updated recursively
@@ -166,7 +173,7 @@ bool CVideoResume::IsVisible(const CFileItem& itemIn) const
   if (item.IsDeleted()) // e.g. trashed pvr recording
     return false;
 
-  return CGUIWindowVideoBase::HasResumeItemOffset(&item);
+  return VIDEO_UTILS::GetItemResumeInformation(item).isResumable;
 }
 
 namespace
@@ -294,7 +301,7 @@ std::string CVideoPlay::GetLabel(const CFileItem& itemIn) const
   CFileItem item(itemIn.GetItemToPlay());
   if (item.IsLiveTV())
     return g_localizeStrings.Get(19000); // Switch to channel
-  if (CGUIWindowVideoBase::HasResumeItemOffset(&item))
+  if (VIDEO_UTILS::GetItemResumeInformation(item).isResumable)
     return g_localizeStrings.Get(12021); // Play from beginning
   return g_localizeStrings.Get(208); // Play
 }
@@ -315,6 +322,27 @@ bool CVideoPlay::Execute(const std::shared_ptr<CFileItem>& itemIn) const
   return true;
 };
 
+namespace
+{
+void SelectNextItem(int windowID)
+{
+  auto& windowMgr = CServiceBroker::GetGUI()->GetWindowManager();
+  CGUIWindow* window = windowMgr.GetWindow(windowID);
+  if (window)
+  {
+    const int viewContainerID = window->GetViewContainerID();
+    if (viewContainerID > 0)
+    {
+      CGUIMessage msg1(GUI_MSG_ITEM_SELECTED, windowID, viewContainerID);
+      windowMgr.SendMessage(msg1, windowID);
+
+      CGUIMessage msg2(GUI_MSG_ITEM_SELECT, windowID, viewContainerID, msg1.GetParam1() + 1);
+      windowMgr.SendMessage(msg2, windowID);
+    }
+  }
+}
+} // unnamed namespace
+
 bool CVideoQueue::IsVisible(const CFileItem& item) const
 {
   if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VIDEO_PLAYLIST)
@@ -328,10 +356,15 @@ bool CVideoQueue::IsVisible(const CFileItem& item) const
 
 bool CVideoQueue::Execute(const std::shared_ptr<CFileItem>& item) const
 {
-  if (CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow() == WINDOW_VIDEO_PLAYLIST)
+  const int windowID = CServiceBroker::GetGUI()->GetWindowManager().GetActiveWindow();
+  if (windowID == WINDOW_VIDEO_PLAYLIST)
     return false; // Already queued
 
   VIDEO_UTILS::QueueItem(item, VIDEO_UTILS::QueuePosition::POSITION_END);
+
+  // Set selection to next item in active window's view.
+  SelectNextItem(windowID);
+
   return true;
 };
 

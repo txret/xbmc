@@ -34,6 +34,8 @@
 #include "utils/log.h"
 #include "video/VideoInfoTag.h"
 
+#include <memory>
+#include <mutex>
 #include <set>
 
 #include <Platinum/Source/Platinum/Platinum.h>
@@ -243,10 +245,10 @@ public:
             NPT_String::Format("<upnp:lastPlaybackPosition>%ld</upnp:lastPlaybackPosition>",
               time)));
 
-          NPT_String curr_value = "<upnp:lastPlayerState>";
+          NPT_String curr_value = "<xbmc:lastPlayerState>";
           PLT_Didl::AppendXmlEscape(curr_value, item.GetVideoInfoTag()->GetResumePoint().playerState.c_str());
           curr_value += "</xbmc:lastPlayerState>";
-          NPT_String new_value = "<upnp:lastPlayerState>";
+          NPT_String new_value = "<xbmc:lastPlayerState>";
           PLT_Didl::AppendXmlEscape(new_value, bookmark.playerState.c_str());
           new_value += "</xbmc:lastPlayerState>";
           values.insert(std::make_pair(curr_value, new_value));
@@ -651,13 +653,14 @@ CUPnP::UpdateItem(const std::string& path, const CFileItem& item)
 void
 CUPnP::StartClient()
 {
-    if (m_MediaBrowser != NULL)
-        return;
+  std::unique_lock<CCriticalSection> lock(m_lockMediaBrowser);
+  if (m_MediaBrowser != NULL)
+    return;
 
-    CreateControlPoint();
+  CreateControlPoint();
 
-    // start browser
-    m_MediaBrowser = new CMediaBrowser(m_CtrlPointHolder->m_CtrlPoint);
+  // start browser
+  m_MediaBrowser = new CMediaBrowser(m_CtrlPointHolder->m_CtrlPoint);
 }
 
 /*----------------------------------------------------------------------
@@ -666,14 +669,15 @@ CUPnP::StartClient()
 void
 CUPnP::StopClient()
 {
-    if (m_MediaBrowser == NULL)
-        return;
+  std::unique_lock<CCriticalSection> lock(m_lockMediaBrowser);
+  if (m_MediaBrowser == NULL)
+    return;
 
-    delete m_MediaBrowser;
-    m_MediaBrowser = NULL;
+  delete m_MediaBrowser;
+  m_MediaBrowser = NULL;
 
-    if (!IsControllerStarted())
-        DestroyControlPoint();
+  if (!IsControllerStarted())
+    DestroyControlPoint();
 }
 
 /*----------------------------------------------------------------------

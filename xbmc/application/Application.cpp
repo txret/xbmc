@@ -295,12 +295,23 @@ void CApplication::HandlePortEvents()
             //auto& gfxContext = CServiceBroker::GetWinSystem()->GetGfxContext();
             //gfxContext.SetVideoResolution(gfxContext.GetVideoResolution(), true);
             // try to resize window back to it's full screen size
+            //! TODO: DX windowing should emit XBMC_FULLSCREEN_UPDATE instead with the proper dimensions
+            //! and position to avoid the ifdef in common code
             auto& res_info = CDisplaySettings::GetInstance().GetResolutionInfo(RES_DESKTOP);
             CServiceBroker::GetWinSystem()->ResizeWindow(res_info.iScreenWidth, res_info.iScreenHeight, 0, 0);
           }
 #endif
         }
         break;
+      case XBMC_FULLSCREEN_UPDATE:
+      {
+        if (CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_fullScreen)
+        {
+          CServiceBroker::GetWinSystem()->ResizeWindow(newEvent.resize.w, newEvent.resize.h,
+                                                       newEvent.move.x, newEvent.move.y);
+        }
+        break;
+      }
       case XBMC_VIDEOMOVE:
       {
         CServiceBroker::GetWinSystem()->OnMove(newEvent.move.x, newEvent.move.y);
@@ -1742,6 +1753,17 @@ void CApplication::OnApplicationMessage(ThreadMessage* pMsg)
       XBMC_Event* event = static_cast<XBMC_Event*>(pMsg->lpVoid);
       OnEvent(*event);
       delete event;
+    }
+  }
+  break;
+
+  case TMSG_UPDATE_PLAYER_ITEM:
+  {
+    std::unique_ptr<CFileItem> item{static_cast<CFileItem*>(pMsg->lpVoid)};
+    if (item)
+    {
+      m_itemCurrentFile->UpdateInfo(*item);
+      CServiceBroker::GetGUI()->GetInfoManager().UpdateCurrentItem(*m_itemCurrentFile);
     }
   }
   break;

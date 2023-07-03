@@ -26,6 +26,7 @@
 #include "dialogs/GUIDialogSmartPlaylistEditor.h"
 #include "dialogs/GUIDialogYesNo.h"
 #include "filesystem/Directory.h"
+#include "filesystem/MultiPathDirectory.h"
 #include "filesystem/StackDirectory.h"
 #include "filesystem/VideoDatabaseDirectory.h"
 #include "guilib/GUIComponent.h"
@@ -462,52 +463,6 @@ void CGUIWindowVideoBase::OnQueueItem(int iItem, bool first)
   m_viewControl.SetSelectedItem(iItem + 1);
 }
 
-void CGUIWindowVideoBase::GetResumeItemOffset(const CFileItem *item, int64_t& startoffset, int& partNumber)
-{
-  // do not resume Live TV and 'deleted' items (e.g. trashed pvr recordings)
-  if (item->IsLiveTV() || item->IsDeleted())
-    return;
-
-  startoffset = 0;
-  partNumber = 0;
-
-  if (item->IsResumable())
-  {
-    if (item->GetCurrentResumeTimeAndPartNumber(startoffset, partNumber))
-    {
-      startoffset = CUtil::ConvertSecsToMilliSecs(startoffset);
-    }
-    else
-    {
-      CBookmark bookmark;
-      std::string strPath = item->GetPath();
-      if ((item->IsVideoDb() || item->IsDVD()) && item->HasVideoInfoTag())
-        strPath = item->GetVideoInfoTag()->m_strFileNameAndPath;
-
-      CVideoDatabase db;
-      if (!db.Open())
-      {
-        CLog::Log(LOGERROR, "{} - Cannot open VideoDatabase", __FUNCTION__);
-        return;
-      }
-      if (db.GetResumeBookMark(strPath, bookmark))
-      {
-        startoffset = CUtil::ConvertSecsToMilliSecs(bookmark.timeInSeconds);
-        partNumber = bookmark.partNumber;
-      }
-      db.Close();
-    }
-  }
-}
-
-bool CGUIWindowVideoBase::HasResumeItemOffset(const CFileItem *item)
-{
-  int64_t startoffset = 0;
-  int partNumber = 0;
-  GetResumeItemOffset(item, startoffset, partNumber);
-  return startoffset > 0;
-}
-
 bool CGUIWindowVideoBase::OnClick(int iItem, const std::string &player)
 {
   return CGUIMediaWindow::OnClick(iItem, player);
@@ -586,6 +541,11 @@ bool CGUIWindowVideoBase::OnFileAction(int iItem, int action, const std::string&
     return true;
   case SELECT_ACTION_RESUME:
     item->SetStartOffset(STARTOFFSET_RESUME);
+    if (item->m_bIsFolder)
+    {
+      PlayItem(iItem, player);
+      return true;
+    }
     break;
   case SELECT_ACTION_PLAYPART:
     if (!OnPlayStackPart(iItem))
@@ -595,6 +555,12 @@ bool CGUIWindowVideoBase::OnFileAction(int iItem, int action, const std::string&
     OnQueueItem(iItem);
     return true;
   case SELECT_ACTION_PLAY:
+    if (item->m_bIsFolder)
+    {
+      PlayItem(iItem, player);
+      return true;
+    }
+    break;
   default:
     break;
   }
@@ -670,31 +636,141 @@ void CGUIWindowVideoBase::OnRestartItem(int iItem, const std::string &player)
   CGUIMediaWindow::OnClick(iItem, player);
 }
 
-std::string CGUIWindowVideoBase::GetResumeString(const CFileItem &item)
+void CGUIWindowVideoBase::LoadVideoInfo(CFileItemList& items,
+                                        CVideoDatabase& database,
+                                        bool allowReplaceLabels)
 {
-  std::string resumeString;
-  int64_t startOffset = 0;
-  int startPart = 0;
-  GetResumeItemOffset(&item, startOffset, startPart);
-  if (startOffset > 0)
+  //! @todo this could possibly be threaded as per the music info loading,
+  //!       we could also cache the info
+  if (!items.GetContent().empty() && !items.IsPlugin())
+    return; // don't load for listings that have content set and weren't created from plugins
+
+  std::string content = items.GetContent();
+  // determine content only if it isn't set
+  if (content.empty())
   {
-    resumeString =
-        StringUtils::Format(g_localizeStrings.Get(12022),
-                            StringUtils::SecondsToTimeString(
-                                static_cast<long>(CUtil::ConvertMilliSecsToSecsInt(startOffset)),
-                                TIME_FORMAT_HH_MM_SS));
-    if (startPart > 0)
+    content = database.GetContentForPath(items.GetPath());
+    items.SetContent((content.empty() && !items.IsPlugin()) ? "files" : content);
+  }
+
+  /*
+    If we have a matching item in the library, so we can assign the metadata to it. In addition, we can choose
+    * whether the item is stacked down (eg in the case of folders representing a single item)
+    * whether or not we assign the library's labels to the item, or leave the item as is.
+
+    As certain users (read: certain developers) don't want either of these to occur, we compromise by stacking
+    items down only if stacking is available and enabled.
+
+    Similarly, we assign the "clean" library labels to the item only if the "Replace filenames with library titles"
+    setting is enabled.
+    */
+  const std::shared_ptr<CSettings> settings = CServiceBroker::GetSettingsComponent()->GetSettings();
+  const bool stackItems =
+      items.GetProperty("isstacked").asBoolean() ||
+      (StackingAvailable(items) && settings->GetBool(CSettings::SETTING_MYVIDEOS_STACKVIDEOS));
+  const bool replaceLabels =
+      allowReplaceLabels && settings->GetBool(CSettings::SETTING_MYVIDEOS_REPLACELABELS);
+
+  CFileItemList dbItems;
+  /* NOTE: In the future when GetItemsForPath returns all items regardless of whether they're "in the library"
+           we won't need the fetchedPlayCounts code, and can "simply" do this directly on absence of content. */
+  bool fetchedPlayCounts = false;
+  if (!content.empty())
+  {
+    database.GetItemsForPath(content, items.GetPath(), dbItems);
+    dbItems.SetFastLookup(true);
+  }
+
+  for (int i = 0; i < items.Size(); i++)
+  {
+    CFileItemPtr pItem = items[i];
+    CFileItemPtr match;
+
+    if (pItem->m_bIsFolder && !pItem->IsParentFolder())
     {
-      std::string partString = StringUtils::Format(g_localizeStrings.Get(23051), startPart);
-      resumeString += " (" + partString + ")";
+      // we need this for enabling the right context menu entries, like mark watched / unwatched
+      pItem->SetProperty("IsVideoFolder", true);
+    }
+
+    if (!content
+             .empty()) /* optical media will be stacked down, so it's path won't match the base path */
+    {
+      std::string pathToMatch =
+          pItem->IsOpticalMediaFile() ? pItem->GetLocalMetadataPath() : pItem->GetPath();
+      if (URIUtils::IsMultiPath(pathToMatch))
+        pathToMatch = CMultiPathDirectory::GetFirstPath(pathToMatch);
+      match = dbItems.Get(pathToMatch);
+    }
+    if (match)
+    {
+      pItem->UpdateInfo(*match, replaceLabels);
+
+      if (stackItems)
+      {
+        if (match->m_bIsFolder)
+          pItem->SetPath(match->GetVideoInfoTag()->m_strPath);
+        else
+          pItem->SetPath(match->GetVideoInfoTag()->m_strFileNameAndPath);
+        // if we switch from a file to a folder item it means we really shouldn't be sorting files and
+        // folders separately
+        if (pItem->m_bIsFolder != match->m_bIsFolder)
+        {
+          items.SetSortIgnoreFolders(true);
+          pItem->m_bIsFolder = match->m_bIsFolder;
+        }
+      }
+    }
+    else
+    {
+      /* NOTE: Currently we GetPlayCounts on our items regardless of whether content is set
+                as if content is set, GetItemsForPaths doesn't return anything not in the content tables.
+                This code can be removed once the content tables are always filled */
+      if (!pItem->m_bIsFolder && !fetchedPlayCounts)
+      {
+        database.GetPlayCounts(items.GetPath(), items);
+        fetchedPlayCounts = true;
+      }
+
+      // set the watched overlay
+      if (pItem->IsVideo())
+        pItem->SetOverlayImage(CGUIListItem::ICON_OVERLAY_UNWATCHED,
+                               pItem->HasVideoInfoTag() &&
+                                   pItem->GetVideoInfoTag()->GetPlayCount() > 0);
     }
   }
-  return resumeString;
+}
+
+std::string CGUIWindowVideoBase::GetResumeString(const CFileItem &item)
+{
+  const VIDEO_UTILS::ResumeInformation resumeInfo = VIDEO_UTILS::GetItemResumeInformation(item);
+  if (resumeInfo.isResumable)
+  {
+    if (resumeInfo.startOffset > 0)
+    {
+      std::string resumeString = StringUtils::Format(
+          g_localizeStrings.Get(12022),
+          StringUtils::SecondsToTimeString(
+              static_cast<long>(CUtil::ConvertMilliSecsToSecsInt(resumeInfo.startOffset)),
+              TIME_FORMAT_HH_MM_SS));
+      if (resumeInfo.partNumber > 0)
+      {
+        const std::string partString =
+            StringUtils::Format(g_localizeStrings.Get(23051), resumeInfo.partNumber);
+        resumeString += " (" + partString + ")";
+      }
+      return resumeString;
+    }
+    else
+    {
+      return g_localizeStrings.Get(13362); // Continue watching
+    }
+  }
+  return {};
 }
 
 bool CGUIWindowVideoBase::ShowResumeMenu(CFileItem &item)
 {
-  if (!item.m_bIsFolder && !item.IsPVR())
+  if (!item.IsLiveTV())
   {
     std::string resumeString = GetResumeString(item);
     if (!resumeString.empty())
@@ -717,13 +793,6 @@ bool CGUIWindowVideoBase::OnResumeItem(int iItem, const std::string &player)
   if (iItem < 0 || iItem >= m_vecItems->Size()) return true;
   CFileItemPtr item = m_vecItems->Get(iItem);
 
-  if (item->m_bIsFolder)
-  {
-    // resuming directories isn't supported yet. play.
-    PlayItem(iItem, player);
-    return true;
-  }
-
   std::string resumeString = GetResumeString(*item);
 
   if (!resumeString.empty())
@@ -735,6 +804,13 @@ bool CGUIWindowVideoBase::OnResumeItem(int iItem, const std::string &player)
     if (value < 0)
       return true;
     return OnFileAction(iItem, value, player);
+  }
+
+  if (item->m_bIsFolder)
+  {
+    // resuming directories isn't fully supported yet. play all of its content.
+    PlayItem(iItem, player);
+    return true;
   }
 
   return OnFileAction(iItem, SELECT_ACTION_PLAY, player);
@@ -870,9 +946,10 @@ bool CGUIWindowVideoBase::OnPlayStackPart(int iItem)
         int value = CGUIDialogContextMenu::ShowAndGetChoice(choices);
         if (value == SELECT_ACTION_RESUME)
         {
-          int64_t startOffset{0};
-          GetResumeItemOffset(parts[selectedFile].get(), startOffset, stack->m_lStartPartNumber);
-          stack->SetStartOffset(startOffset);
+          const VIDEO_UTILS::ResumeInformation resumeInfo =
+              VIDEO_UTILS::GetItemResumeInformation(*parts[selectedFile]);
+          stack->SetStartOffset(resumeInfo.startOffset);
+          stack->m_lStartPartNumber = resumeInfo.partNumber;
         }
         else if (value != SELECT_ACTION_PLAY)
           return false; // if not selected PLAY, then we changed our mind so return
@@ -1033,7 +1110,7 @@ bool CGUIWindowVideoBase::OnPlayMedia(int iItem, const std::string &player)
   }
   CLog::Log(LOGDEBUG, "{} {}", __FUNCTION__, CURL::GetRedacted(item.GetPath()));
 
-  item.SetProperty("playlist_type_hint", PLAYLIST::TYPE_VIDEO);
+  item.SetProperty("playlist_type_hint", m_guiState->GetPlaylist());
 
   PlayMovie(&item, player);
 

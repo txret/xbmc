@@ -23,6 +23,7 @@
 #include "pvr/channels/PVRChannelGroupInternal.h"
 #include "pvr/guilib/PVRGUIProgressHandler.h"
 #include "utils/JobManager.h"
+#include "utils/StringUtils.h"
 #include "utils/log.h"
 
 #include <algorithm>
@@ -170,10 +171,10 @@ void CPVRClients::UpdateClients(
         {
           CServiceBroker::GetAddonMgr().DisableAddon(client->ID(),
                                                      AddonDisabledReason::PERMANENT_FAILURE);
-          CServiceBroker::GetJobManager()->AddJob(new CPVREventLogJob(true, true, client->Name(),
-                                                                      g_localizeStrings.Get(24070),
-                                                                      client->Icon()),
-                                                  nullptr);
+          CServiceBroker::GetJobManager()->AddJob(
+              new CPVREventLogJob(true, EventLevel::Error, client->Name(),
+                                  g_localizeStrings.Get(24070), client->Icon()),
+              nullptr);
         }
       }
     }
@@ -694,72 +695,77 @@ PVR_ERROR CPVRClients::GetChannelGroupMembers(
 std::vector<std::shared_ptr<CPVRClient>> CPVRClients::GetClientsSupportingChannelScan() const
 {
   std::vector<std::shared_ptr<CPVRClient>> possibleScanClients;
-  ForCreatedClients(__FUNCTION__, [&possibleScanClients](const std::shared_ptr<CPVRClient>& client) {
-    if (client->GetClientCapabilities().SupportsChannelScan())
+
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  for (const auto& entry : m_clientMap)
+  {
+    const auto& client = entry.second;
+    if (client->ReadyToUse() && !client->IgnoreClient() &&
+        client->GetClientCapabilities().SupportsChannelScan())
       possibleScanClients.emplace_back(client);
-    return PVR_ERROR_NO_ERROR;
-  });
+  }
+
   return possibleScanClients;
 }
 
 std::vector<std::shared_ptr<CPVRClient>> CPVRClients::GetClientsSupportingChannelSettings(bool bRadio) const
 {
   std::vector<std::shared_ptr<CPVRClient>> possibleSettingsClients;
-  ForCreatedClients(__FUNCTION__, [bRadio, &possibleSettingsClients](const std::shared_ptr<CPVRClient>& client) {
-    const CPVRClientCapabilities& caps = client->GetClientCapabilities();
-    if (caps.SupportsChannelSettings() &&
-        ((bRadio && caps.SupportsRadio()) || (!bRadio && caps.SupportsTV())))
-      possibleSettingsClients.emplace_back(client);
-    return PVR_ERROR_NO_ERROR;
-  });
+
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  for (const auto& entry : m_clientMap)
+  {
+    const auto& client = entry.second;
+    if (client->ReadyToUse() && !client->IgnoreClient())
+    {
+      const CPVRClientCapabilities& caps = client->GetClientCapabilities();
+      if (caps.SupportsChannelSettings() &&
+          ((bRadio && caps.SupportsRadio()) || (!bRadio && caps.SupportsTV())))
+        possibleSettingsClients.emplace_back(client);
+    }
+  }
+
   return possibleSettingsClients;
 }
 
 bool CPVRClients::AnyClientSupportingRecordingsSize() const
 {
-  std::vector<std::shared_ptr<CPVRClient>> recordingSizeClients;
-  ForCreatedClients(__FUNCTION__, [&recordingSizeClients](const std::shared_ptr<CPVRClient>& client) {
-    if (client->GetClientCapabilities().SupportsRecordingsSize())
-      recordingSizeClients.emplace_back(client);
-    return PVR_ERROR_NO_ERROR;
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  return std::any_of(m_clientMap.cbegin(), m_clientMap.cend(), [](const auto& entry) {
+    const auto& client = entry.second;
+    return client->ReadyToUse() && !client->IgnoreClient() &&
+           client->GetClientCapabilities().SupportsRecordingsSize();
   });
-  return recordingSizeClients.size() != 0;
 }
 
 bool CPVRClients::AnyClientSupportingEPG() const
 {
-  bool bHaveSupportingClient = false;
-  ForCreatedClients(__FUNCTION__,
-                    [&bHaveSupportingClient](const std::shared_ptr<CPVRClient>& client) {
-                      if (client->GetClientCapabilities().SupportsEPG())
-                        bHaveSupportingClient = true;
-                      return PVR_ERROR_NO_ERROR;
-                    });
-  return bHaveSupportingClient;
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  return std::any_of(m_clientMap.cbegin(), m_clientMap.cend(), [](const auto& entry) {
+    const auto& client = entry.second;
+    return client->ReadyToUse() && !client->IgnoreClient() &&
+           client->GetClientCapabilities().SupportsEPG();
+  });
 }
 
 bool CPVRClients::AnyClientSupportingRecordings() const
 {
-  bool bHaveSupportingClient = false;
-  ForCreatedClients(__FUNCTION__,
-                    [&bHaveSupportingClient](const std::shared_ptr<CPVRClient>& client) {
-                      if (client->GetClientCapabilities().SupportsRecordings())
-                        bHaveSupportingClient = true;
-                      return PVR_ERROR_NO_ERROR;
-                    });
-  return bHaveSupportingClient;
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  return std::any_of(m_clientMap.cbegin(), m_clientMap.cend(), [](const auto& entry) {
+    const auto& client = entry.second;
+    return client->ReadyToUse() && !client->IgnoreClient() &&
+           client->GetClientCapabilities().SupportsRecordings();
+  });
 }
 
 bool CPVRClients::AnyClientSupportingRecordingsDelete() const
 {
-  bool bHaveSupportingClient = false;
-  ForCreatedClients(__FUNCTION__,
-                    [&bHaveSupportingClient](const std::shared_ptr<CPVRClient>& client) {
-                      if (client->GetClientCapabilities().SupportsRecordingsDelete())
-                        bHaveSupportingClient = true;
-                      return PVR_ERROR_NO_ERROR;
-                    });
-  return bHaveSupportingClient;
+  std::unique_lock<CCriticalSection> lock(m_critSection);
+  return std::any_of(m_clientMap.cbegin(), m_clientMap.cend(), [](const auto& entry) {
+    const auto& client = entry.second;
+    return client->ReadyToUse() && !client->IgnoreClient() &&
+           client->GetClientCapabilities().SupportsRecordingsDelete();
+  });
 }
 
 void CPVRClients::OnSystemSleep()
@@ -803,7 +809,7 @@ void CPVRClients::ConnectionStateChange(CPVRClient* client,
     return;
 
   int iMsg = -1;
-  bool bError = true;
+  EventLevel eLevel = EventLevel::Error;
   bool bNotify = true;
 
   switch (newState)
@@ -828,7 +834,7 @@ void CPVRClients::ConnectionStateChange(CPVRClient* client,
       iMsg = 35508; // Access denied
       break;
     case PVR_CONNECTION_STATE_CONNECTED:
-      bError = false;
+      eLevel = EventLevel::Basic;
       iMsg = 36034; // Connection established
       if (client->GetPreviousConnectionState() == PVR_CONNECTION_STATE_UNKNOWN ||
           client->GetPreviousConnectionState() == PVR_CONNECTION_STATE_CONNECTING)
@@ -838,7 +844,7 @@ void CPVRClients::ConnectionStateChange(CPVRClient* client,
       iMsg = 36030; // Connection lost
       break;
     case PVR_CONNECTION_STATE_CONNECTING:
-      bError = false;
+      eLevel = EventLevel::Information;
       iMsg = 35509; // Connecting
       bNotify = false;
       break;
@@ -854,9 +860,13 @@ void CPVRClients::ConnectionStateChange(CPVRClient* client,
   else
     strMsg = g_localizeStrings.Get(iMsg);
 
+  if (!strConnectionString.empty())
+    strMsg = StringUtils::Format("{} ({})", strMsg, strConnectionString);
+
   // Notify user.
   CServiceBroker::GetJobManager()->AddJob(
-      new CPVREventLogJob(bNotify, bError, client->Name(), strMsg, client->Icon()), nullptr);
+      new CPVREventLogJob(bNotify, eLevel, client->GetFriendlyName(), strMsg, client->Icon()),
+      nullptr);
 }
 
 namespace

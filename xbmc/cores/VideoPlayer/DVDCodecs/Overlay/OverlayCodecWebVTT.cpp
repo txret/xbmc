@@ -80,11 +80,11 @@ OverlayMessage COverlayCodecWebVTT::Decode(DemuxPacket* pPacket)
 
   m_webvttHandler.Reset();
 
-  SubtitlePacketExtraData sideData;
-  if (GetSubtitlePacketExtraData(pPacket, sideData))
-  {
-    m_webvttHandler.SetPeriodStart(sideData.m_chapterStartTime);
-  }
+  // WebVTT subtitles has no relation with packet PTS then if
+  // a period/chapter change happens (e.g. HLS streaming) VP can detect a discontinuity
+  // and adjust the packet PTS by substracting the pts offset correction value,
+  // so here we have to adjust WebVTT subtitles PTS by substracting it at same way
+  m_webvttHandler.SetPeriodStart(pPacket->m_ptsOffsetCorrection * -1);
 
   if (m_isISOFormat)
   {

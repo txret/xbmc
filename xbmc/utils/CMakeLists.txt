@@ -21,6 +21,7 @@ set(SOURCES ActorProtocol.cpp
             DiscsUtils.cpp
             EndianSwap.cpp
             EmbeddedArt.cpp
+            ExecString.cpp
             FileExtensionProvider.cpp
             Fanart.cpp
             FileOperationJob.cpp
@@ -45,6 +46,7 @@ set(SOURCES ActorProtocol.cpp
             MovingSpeed.cpp
             Observer.cpp
             POUtils.cpp
+            PlayerUtils.cpp
             RecentlyAddedJob.cpp
             RegExp.cpp
             rfft.cpp
@@ -100,6 +102,7 @@ set(HEADERS ActorProtocol.h
             EndianSwap.h
             EventStream.h
             EventStreamDetail.h
+            ExecString.h
             FileExtensionProvider.h
             Fanart.h
             FileOperationJob.h
@@ -142,6 +145,7 @@ set(HEADERS ActorProtocol.h
             Observer.h
             params_check_macros.h
             POUtils.h
+            PlayerUtils.h
             ProgressJob.h
             RecentlyAddedJob.h
             RegExp.h

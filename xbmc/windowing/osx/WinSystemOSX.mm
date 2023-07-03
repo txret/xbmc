@@ -648,14 +648,8 @@ bool CWinSystemOSX::CreateNewWindow(const std::string& name, bool fullScreen, RE
     [appWindow makeKeyWindow];
   }];
 
-  // for native fullscreen we always want to set the
-  // same windowed flags
-  NSUInteger windowStyleMask;
-  if (fullScreen)
-    windowStyleMask = NSWindowStyleMaskBorderless;
-  else
-    windowStyleMask = NSWindowStyleMaskTitled | NSWindowStyleMaskResizable |
-                      NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable;
+  const NSUInteger windowStyleMask = NSWindowStyleMaskTitled | NSWindowStyleMaskResizable |
+                                     NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable;
 
   if (m_appWindow == nullptr)
   {
@@ -674,7 +668,6 @@ bool CWinSystemOSX::CreateNewWindow(const std::string& name, bool fullScreen, RE
       NSString* title = [NSString stringWithUTF8String:m_name.c_str()];
       appWindow.backgroundColor = NSColor.blackColor;
       appWindow.title = title;
-      [appWindow setOneShot:NO];
 
       NSWindowCollectionBehavior behavior = appWindow.collectionBehavior;
       behavior |= NSWindowCollectionBehaviorFullScreenPrimary;
@@ -699,14 +692,6 @@ bool CWinSystemOSX::CreateNewWindow(const std::string& name, bool fullScreen, RE
                                         waitUntilDone:YES];
 
   [NSAnimationContext endGrouping];
-
-  if (fullScreen)
-  {
-    m_fullscreenWillToggle = true;
-    [appWindow performSelectorOnMainThread:@selector(toggleFullScreen:)
-                                withObject:nil
-                             waitUntilDone:YES];
-  }
 
   // get screen refreshrate - this is needed
   // when we startup in windowed mode and don't run through SetFullScreen
@@ -1199,11 +1184,13 @@ void CWinSystemOSX::WindowChangedScreen()
 
 CGLContextObj CWinSystemOSX::GetCGLContextObj()
 {
-  CGLContextObj cglcontex = nullptr;
+  __block CGLContextObj cglcontex = nullptr;
   if (m_appWindow)
   {
-    OSXGLView* contentView = m_appWindow.contentView;
-    cglcontex = contentView.getGLContext.CGLContextObj;
+    dispatch_sync(dispatch_get_main_queue(), ^{
+      OSXGLView* contentView = m_appWindow.contentView;
+      cglcontex = contentView.getGLContext.CGLContextObj;
+    });
   }
 
   return cglcontex;
@@ -1229,7 +1216,8 @@ void CWinSystemOSX::EnableVSync(bool enable)
 {
   // OpenGL Flush synchronised with vertical retrace
   GLint swapInterval = enable ? 1 : 0;
-  [NSOpenGLContext.currentContext setValues:&swapInterval forParameter:NSOpenGLCPSwapInterval];
+  [NSOpenGLContext.currentContext setValues:&swapInterval
+                               forParameter:NSOpenGLContextParameterSwapInterval];
 }
 
 std::unique_ptr<CVideoSync> CWinSystemOSX::GetVideoSync(void* clock)
